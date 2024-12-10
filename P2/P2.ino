@@ -25,11 +25,13 @@ uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 char payloadT[5] = "Hello";
 char payloadR[5];
 uint8_t origem = 44;
+uint8_t rede = 88;
 
-bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, unsigned long timeout) {
+bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
   pacote[0] = destino;
   pacote[1] = origem;
-  pacote[2] = controle;
+  pacote[2] = rede;
+  pacote[3] = controle;
   unsigned long start_timer = micros();  // start the timer
   while (micros() - start_timer < timeout) {
     radio.startListening();
@@ -37,22 +39,24 @@ bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uns
     radio.stopListening();
     if (!radio.testCarrier()) {
       radio.write(&pacote[0], tamanho);
-      Serial.println("R");
       return true;
     } else {
-      Serial.println("O");
       delayMicroseconds(150);
     }
   }
   return false;
 }
-bool recebe(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, unsigned long timeout) {
+bool recebe(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
   unsigned long start_timer = micros();
   radio.startListening();
   while (micros() - start_timer < timeout) {
     if (radio.available()) {
       radio.read(&pacote[0], tamanho);
-      if (pacote[0] == origem && pacote[1] == destino && pacote[2] == controle) {
+      if (pacote[0] == origem && pacote[1] == destino && pacote[2] == rede && pacote[3] == controle) {
+        Serial.print("[");
+        Serial.print(int(pacote[1]));
+        Serial.print("]");
+        Serial.println(int(pacote[4]));
         return true;
       }
       radio.flush_rx();
@@ -62,23 +66,23 @@ bool recebe(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, un
 }
 
 bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
-  char controle[3];
+  char controle[4];
   bool enviou = false;
   bool recebeu = false;
 
-  enviou = envia(&controle[0], destino, 3, RTS, TIMEOUTSEND);
+  enviou = envia(&controle[0], destino, 4, RTS, rede, TIMEOUTSEND);
   if (enviou) {
-    recebeu = recebe(&controle[0], destino, 3, CTS, TIMEOUTRECV);
+    recebeu = recebe(&controle[0], destino, 4, CTS, rede, TIMEOUTRECV);
   } else {
     return false;
   }
   if (recebeu) {
-    enviou = envia(&pacote[0], destino, tamanho, DATA, TIMEOUTSEND);
+    enviou = envia(&pacote[0], destino, tamanho, DATA, rede, TIMEOUTSEND);
   } else {
     return false;
   }
   if (enviou) {
-    recebeu = recebe(&controle[0], destino, 3, ACK, TIMEOUTRECV);
+    recebeu = recebe(&controle[0], destino, 4, ACK, rede, TIMEOUTRECV);
   } else {
     return false;
   }
@@ -86,22 +90,22 @@ bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
 }
 
 bool recebeTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
-  char controle[3];
+  char controle[4];
   bool recebeu = false;
   bool enviou = false;
-  recebeu = recebe(&controle[0], destino, 3, RTS, TIMEOUTRECV);
+  recebeu = recebe(&controle[0], destino, 4, RTS, rede, TIMEOUTRECV);
   if (recebeu) {
-    enviou = envia(&controle[0], destino, 3, CTS, TIMEOUTSEND);
+    enviou = envia(&controle[0], destino, 4, CTS, rede, TIMEOUTSEND);
   } else {
     return false;
   }
   if (enviou) {
-    recebeu = recebe(&pacote[0], destino, tamanho, DATA, TIMEOUTRECV);
+    recebeu = recebe(&pacote[0], destino, tamanho, DATA, rede, TIMEOUTRECV);
   } else {
     return false;
   }
   if (recebeu) {
-    enviou = envia(&controle[0], destino, 3, ACK, TIMEOUTSEND);
+    enviou = envia(&controle[0], destino, 4, ACK, rede, TIMEOUTSEND);
   } else {
     return false;
   }
@@ -149,10 +153,13 @@ void loop(void) {
     Serial.print("Destino = ");
     Serial.println(destino);
   }
-  bool sucesso = recebeTrem(&payloadR[0], 5, destino);
-  if (sucesso) {
-    printAula(&payloadR[0], 5);
+  for ( int i = 0; i < 5; i++ ) {
+    payloadR[i] = 1;
   }
+  bool sucesso = recebeTrem(&payloadR[0], 5, destino);
+  // if (sucesso) {
+  //   printAula(&payloadR[0], 5);
+  // }
 }
 
 void printAula(char* texto, byte tamanho) {

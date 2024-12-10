@@ -6,8 +6,12 @@ import aiosqlite
 # Search for Arduino port
 ports = serial.tools.list_ports.comports()
 arduino_port = None
+
+for port in ports:
+    print(port)
+
 for port, desc, hwid in sorted(ports):
-    if 'Arduino Uno' in desc:
+    if 'COM4' in desc:
         arduino_port = port
         break
 
@@ -23,12 +27,13 @@ async def main():
         await db.execute('''CREATE TABLE IF NOT EXISTS records (timestamp DATETIME, room INT, value INT)''')
         await db.commit()
 
-        ser = serial.Serial(arduino_port, 9600, timeout=1)
+        ser = serial.Serial(arduino_port, 500000, timeout=1)
 
         ## Lê porta serial
         while True:
-            print(ser.readline())
+            # print(ser.readline())
             data = ser.readline().decode('utf-8').strip()
+            print(data)
             # Insert into the database if data is in the format '[{plate}]{value}', 
             if data and data.startswith('[') and ']' in data:
                 try:
@@ -39,8 +44,8 @@ async def main():
                     print(f"Plate ID: {plate_id}, Value: {value}, Timestamp: {timestamp}")
                     await db.execute("INSERT INTO records VALUES (?, ?, ?)", (timestamp, plate_id, value))
                     await db.commit()
+                    await asyncio.sleep(1)
                 except ValueError:
                     print(f"Invalid data format: {data}")
-            await asyncio.sleep(1)
 
 asyncio.run(main())
