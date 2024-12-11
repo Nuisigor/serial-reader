@@ -9,6 +9,9 @@
 #define CE_PIN 7
 #define CSN_PIN 8
 
+#define BOT_1 21
+#define BOT_2 23
+
 #define TIMEOUTRECV 1000000  //us
 #define TIMEOUTSEND 6000     //us
 
@@ -17,6 +20,11 @@
 #define CTS 3
 #define DATA 4
 
+struct PacketStatus {
+  bool ret;
+  uint8_t remetente;
+};
+
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(CE_PIN, CSN_PIN);
@@ -24,7 +32,7 @@ uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
 char payloadT[5] = "Hello";
 char payloadR[5];
-uint8_t origem = 13;
+uint8_t origem = 5;
 uint8_t rede = 88;
 
 bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
@@ -46,19 +54,46 @@ bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uin
   }
   return false;
 }
-bool recebe(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
+bool recebeDestino(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
   unsigned long start_timer = micros();
   radio.startListening();
   while (micros() - start_timer < timeout) {
     if (radio.available()) {
       radio.read(&pacote[0], tamanho);
       if (pacote[0] == origem && pacote[1] == destino && pacote[2] == rede && pacote[3] == controle) {
+        Serial.print("[");
+        Serial.print(int(pacote[1]));
+        Serial.print("]");
+        Serial.println(int(pacote[4]));
         return true;
       }
       radio.flush_rx();
     }
   }
   return false;
+}
+
+PacketStatus recebe(char* pacote, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
+  PacketStatus status;
+  status.ret = false;
+  unsigned long start_timer = micros();
+  radio.startListening();
+  while (micros() - start_timer < timeout) {
+    if (radio.available()) {
+      radio.read(&pacote[0], tamanho);
+      if (pacote[0] == origem && pacote[2] == rede && pacote[3] == controle) {
+        Serial.print("[");
+        Serial.print(int(pacote[1]));
+        Serial.print("]");
+        Serial.println(int(pacote[4]));
+        status.ret = true;
+        status.remetente = pacote[1];
+        return status;
+      }
+      radio.flush_rx();
+    }
+  }
+  return status;
 }
 
 bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
@@ -68,7 +103,7 @@ bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
 
   enviou = envia(&controle[0], destino, 4, RTS, rede, TIMEOUTSEND);
   if (enviou) {
-    recebeu = recebe(&controle[0], destino, 4, CTS, rede, TIMEOUTRECV);
+    recebeu = recebeDestino(&controle[0], destino, 4, CTS, rede, TIMEOUTRECV);
   } else {
     return false;
   }
@@ -78,7 +113,7 @@ bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
     return false;
   }
   if (enviou) {
-    recebeu = recebe(&controle[0], destino, 4, ACK, rede, TIMEOUTRECV);
+    recebeu = recebeDestino(&controle[0], destino, 4, ACK, rede, TIMEOUTRECV);
   } else {
     return false;
   }
@@ -89,14 +124,15 @@ bool recebeTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
   char controle[4];
   bool recebeu = false;
   bool enviou = false;
-  recebeu = recebe(&controle[0], destino, 4, RTS, rede, TIMEOUTRECV);
+  PacketStatus status = recebe(&controle[0], 4, RTS, rede, TIMEOUTRECV);
+  recebeu = status.ret;
   if (recebeu) {
-    enviou = envia(&controle[0], destino, 4, CTS, rede, TIMEOUTSEND);
+    enviou = envia(&controle[0], status.remetente, 4, CTS, rede, TIMEOUTSEND);
   } else {
     return false;
   }
   if (enviou) {
-    recebeu = recebe(&pacote[0], destino, tamanho, DATA, rede, TIMEOUTRECV);
+    recebeu = recebeDestino(&pacote[0], status.remetente, tamanho, DATA, rede, TIMEOUTRECV);
   } else {
     return false;
   }
@@ -111,6 +147,8 @@ bool recebeTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
 
 void setup(void) {
 
+  pinMode(BOT_1, INPUT_PULLUP);
+  pinMode(BOT_2, INPUT_PULLUP);
   Serial.begin(500000);
 
   // Setup and configure rf radio
@@ -149,8 +187,15 @@ void loop(void) {
     Serial.print("Destino = ");
     Serial.println(destino);
   }
+  for (int i = 0; i < 5; i++){
+    payloadT[i] = int(1);
+  }
+  if (digitalRead(BOT_2) == HIGH) // Se o botão for pressionado
+  {
+    Serial.println("ASDSA");
+  }
   bool sucesso = enviaTrem(&payloadT[0], 5, destino);
-  delay(1000);
+  // delay(1000);
   // if (sucesso) {
   //   printAula(&payloadT[0], 5);
   // }
