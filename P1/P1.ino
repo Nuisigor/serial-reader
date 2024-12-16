@@ -9,8 +9,8 @@
 #define CE_PIN 7
 #define CSN_PIN 8
 
-#define BOT_1 21
-#define BOT_2 23
+#define BOT_1 2  // Botão 1 conectado ao pino D2
+#define BOT_2 3  // Botão 2 conectado ao pino D3
 
 #define TIMEOUTRECV 1000000  //us
 #define TIMEOUTSEND 6000     //us
@@ -25,188 +25,134 @@ struct PacketStatus {
   uint8_t remetente;
 };
 
-
-// instantiate an object for the nRF24L01 transceiver
 RF24 radio(CE_PIN, CSN_PIN);
 uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
-char payloadT[5] = "Hello";
-char payloadR[5];
+char payloadT[10];  // Payload para os bits a serem enviados
 uint8_t origem = 5;
 uint8_t rede = 88;
 
+// Variáveis de estado para os botões
+bool botao1Pressionado = false;
+bool botao2Pressionado = false;
+unsigned long tempoBotao1 = 0; // Armazena o tempo do pressionamento
+unsigned long tempoBotao2 = 0;
+
 bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
+  Serial.println("Iniciando envio...");
   pacote[0] = destino;
   pacote[1] = origem;
   pacote[2] = rede;
   pacote[3] = controle;
-  unsigned long start_timer = micros();  // start the timer
+
+  unsigned long start_timer = micros();
   while (micros() - start_timer < timeout) {
     radio.startListening();
     delayMicroseconds(70);
     radio.stopListening();
-    if (!radio.testCarrier()) {
-      radio.write(&pacote[0], tamanho);
-      return true;
-    } else {
-      delayMicroseconds(150);
-    }
-  }
-  return false;
-}
-bool recebeDestino(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
-  unsigned long start_timer = micros();
-  radio.startListening();
-  while (micros() - start_timer < timeout) {
-    if (radio.available()) {
-      radio.read(&pacote[0], tamanho);
-      if (pacote[0] == origem && pacote[1] == destino && pacote[2] == rede && pacote[3] == controle) {
-        Serial.print("[");
-        Serial.print(int(pacote[1]));
-        Serial.print("]");
-        Serial.println(int(pacote[4]));
-        return true;
-      }
-      radio.flush_rx();
-    }
-  }
-  return false;
-}
 
-PacketStatus recebe(char* pacote, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
-  PacketStatus status;
-  status.ret = false;
-  unsigned long start_timer = micros();
-  radio.startListening();
-  while (micros() - start_timer < timeout) {
-    if (radio.available()) {
-      radio.read(&pacote[0], tamanho);
-      if (pacote[0] == origem && pacote[2] == rede && pacote[3] == controle) {
-        Serial.print("[");
-        Serial.print(int(pacote[1]));
-        Serial.print("]");
-        Serial.println(int(pacote[4]));
-        status.ret = true;
-        status.remetente = pacote[1];
-        return status;
+    if (!radio.testCarrier()) {
+      Serial.println("Canal livre, enviando pacote...");
+      if (radio.write(&pacote[0], tamanho)) {
+        Serial.println("Pacote enviado com sucesso.");
+        return true;
+      } else {
+        Serial.println("Falha no envio do pacote.");
       }
-      radio.flush_rx();
     }
+    delayMicroseconds(150);
   }
-  return status;
+  Serial.println("Tempo de envio esgotado.");
+  return false;
 }
 
 bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
-  char controle[4];
-  bool enviou = false;
-  bool recebeu = false;
+  Serial.println("Iniciando envioTrem...");
 
-  enviou = envia(&controle[0], destino, 4, RTS, rede, TIMEOUTSEND);
-  if (enviou) {
-    recebeu = recebeDestino(&controle[0], destino, 4, CTS, rede, TIMEOUTRECV);
-  } else {
+  char controle[4];
+  bool enviou = envia(&controle[0], destino, 4, RTS, rede, TIMEOUTSEND);
+  if (!enviou) {
+    Serial.println("Falha ao enviar RTS.");
     return false;
   }
-  if (recebeu) {
-    enviou = envia(&pacote[0], destino, tamanho, DATA, rede, TIMEOUTSEND);
-  } else {
+
+  Serial.println("RTS enviado, aguardando CTS...");
+  bool recebeu = envia(&controle[0], destino, 4, CTS, rede, TIMEOUTSEND);
+  if (!recebeu) {
+    Serial.println("Falha ao receber CTS.");
     return false;
   }
-  if (enviou) {
-    recebeu = recebeDestino(&controle[0], destino, 4, ACK, rede, TIMEOUTRECV);
-  } else {
+
+  Serial.println("CTS recebido, enviando dados...");
+  enviou = envia(&pacote[0], destino, tamanho, DATA, rede, TIMEOUTSEND);
+  if (!enviou) {
+    Serial.println("Falha ao enviar dados.");
     return false;
   }
+
+  Serial.println("Dados enviados com sucesso!");
   return true;
 }
-
-bool recebeTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
-  char controle[4];
-  bool recebeu = false;
-  bool enviou = false;
-  PacketStatus status = recebe(&controle[0], 4, RTS, rede, TIMEOUTRECV);
-  recebeu = status.ret;
-  if (recebeu) {
-    enviou = envia(&controle[0], status.remetente, 4, CTS, rede, TIMEOUTSEND);
-  } else {
-    return false;
-  }
-  if (enviou) {
-    recebeu = recebeDestino(&pacote[0], status.remetente, tamanho, DATA, rede, TIMEOUTRECV);
-  } else {
-    return false;
-  }
-  if (recebeu) {
-    enviou = envia(&controle[0], destino, 4, ACK, rede, TIMEOUTSEND);
-  } else {
-    return false;
-  }
-  return true;
-}
-
 
 void setup(void) {
+  pinMode(BOT_1, INPUT_PULLUP);  // Botão 1 (D2)
+  pinMode(BOT_2, INPUT_PULLUP);  // Botão 2 (D3)
+  Serial.begin(115200);
 
-  pinMode(BOT_1, INPUT_PULLUP);
-  pinMode(BOT_2, INPUT_PULLUP);
-  Serial.begin(500000);
-
-  // Setup and configure rf radio
   if (!radio.begin()) {
     Serial.println(F("radio hardware not responding!"));
-    while (true) {
-      // hold in an infinite loop
-    }
+    while (true);
   }
 
-  radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
-  radio.setAutoAck(false);        // Don't acknowledge arbitrary signals
-  radio.disableCRC();             // Accept any signal we find
+  radio.setPALevel(RF24_PA_MAX);
+  radio.setAutoAck(false);
+  radio.disableCRC();
   radio.setDataRate(RF24_1MBPS);
-
-
   radio.setPayloadSize(sizeof(payloadT));
-
-  radio.openWritingPipe(address[0]);     // always uses pipe 0
-  radio.openReadingPipe(1, address[1]);  // using pipe 1
-
+  radio.openWritingPipe(address[0]);
+  radio.openReadingPipe(1, address[1]);
   radio.setChannel(100);
 
   printf_begin();
   radio.printPrettyDetails();
-
-  radio.startListening();
-  radio.stopListening();
-  radio.flush_rx();
 }
 
 void loop(void) {
   uint8_t destino = 44;
-  if (Serial.available()) {
-    destino = int(Serial.read());
-    Serial.print("Destino = ");
-    Serial.println(destino);
-  }
-  for (int i = 0; i < 5; i++){
-    payloadT[i] = int(1);
-  }
-  if (digitalRead(BOT_2) == HIGH) // Se o botão for pressionado
-  {
-    Serial.println("ASDSA");
-  }
-  bool sucesso = enviaTrem(&payloadT[0], 5, destino);
-  // delay(1000);
-  // if (sucesso) {
-  //   printAula(&payloadT[0], 5);
-  // }
-}
 
-void printAula(char* texto, byte tamanho) {
-  Serial.print(int(texto[0]));
-  Serial.print(int(texto[1]));
-  for (byte i = 2; i < tamanho; i++) {
-    Serial.print(char(texto[i]));
+  // Botão 1 pressionado
+  if (digitalRead(BOT_1) == LOW && !botao1Pressionado) {
+    botao1Pressionado = true;
+    tempoBotao1 = millis();
+    Serial.println("Botão 1 pressionado. Aguardando Botão 2...");
+    delay(200);  // Debounce
   }
-  Serial.println();
-  Serial.println("foi");
+
+  // Botão 2 pressionado
+  if (digitalRead(BOT_2) == LOW && !botao2Pressionado) {
+    botao2Pressionado = true;
+    tempoBotao2 = millis();
+    Serial.println("Botão 2 pressionado. Aguardando Botão 1...");
+    delay(200);  // Debounce
+  }
+
+  // Verifica sequência Botão 1 -> Botão 2
+  if (botao1Pressionado && botao2Pressionado) {
+    if (tempoBotao2 - tempoBotao1 <= 2000) {  // 2 segundos limite
+      Serial.println("Sequência Botão 1 -> Botão 2 detectada. Enviando 8 bits...");
+      for (int i = 0; i < 8; i++) payloadT[i] = 0b10101010;  // 8 bits
+      enviaTrem(&payloadT[0], 8, destino);
+    }
+    botao1Pressionado = botao2Pressionado = false;  // Reset estados
+  }
+
+  // Verifica sequência Botão 2 -> Botão 1
+  if (botao2Pressionado && botao1Pressionado) {
+    if (tempoBotao1 - tempoBotao2 <= 2000) {  // 2 segundos limite
+      Serial.println("Sequência Botão 2 -> Botão 1 detectada. Enviando 16 bits...");
+      for (int i = 0; i < 8; i++) payloadT[i] = 0b10101010;  // 16 bits
+      enviaTrem(&payloadT[0], 8, destino);
+    }
+    botao1Pressionado = botao2Pressionado = false;  // Reset estados
+  }
 }
