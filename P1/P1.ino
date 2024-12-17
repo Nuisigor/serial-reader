@@ -117,42 +117,38 @@ void setup(void) {
   radio.printPrettyDetails();
 }
 
+uint8_t destino = 44;
+uint8_t last_button = 0;
+unsigned long last_button_press = 0;
+
+
 void loop(void) {
-  uint8_t destino = 44;
-
-  // Botão 1 pressionado
-  if (digitalRead(BOT_1) == LOW && !botao1Pressionado) {
-    botao1Pressionado = true;
-    tempoBotao1 = millis();
-    Serial.println("Botão 1 pressionado. Aguardando Botão 2...");
-    delay(200);  // Debounce
-  }
-
-  // Botão 2 pressionado
-  if (digitalRead(BOT_2) == LOW && !botao2Pressionado) {
-    botao2Pressionado = true;
-    tempoBotao2 = millis();
-    Serial.println("Botão 2 pressionado. Aguardando Botão 1...");
-    delay(200);  // Debounce
-  }
-
-  // Verifica sequência Botão 1 -> Botão 2
-  if (botao1Pressionado && botao2Pressionado) {
-    if (tempoBotao2 - tempoBotao1 <= 2000) {  // 2 segundos limite
-      Serial.println("Sequência Botão 1 -> Botão 2 detectada. Enviando 8 bits...");
-      for (int i = 0; i < 8; i++) payloadT[i] = 0b10101010;  // 8 bits
-      enviaTrem(&payloadT[0], 8, destino);
+  if (millis() - last_button_press > 2000) {
+    last_button = 0;
+  } 
+  else if (last_button != 0){
+    if (digitalRead(BOT_1) == LOW && last_button != BOT_1){ {
+      Serial.println("B1 --> B2 : Sending entry");
+      for (int i = 0; i < 5; i++) payloadT[i] = 1;
+      enviaTrem(&payloadT[0], 5, destino);
     }
-    botao1Pressionado = botao2Pressionado = false;  // Reset estados
-  }
 
-  // Verifica sequência Botão 2 -> Botão 1
-  if (botao2Pressionado && botao1Pressionado) {
-    if (tempoBotao1 - tempoBotao2 <= 2000) {  // 2 segundos limite
-      Serial.println("Sequência Botão 2 -> Botão 1 detectada. Enviando 16 bits...");
-      for (int i = 0; i < 8; i++) payloadT[i] = 0b10101010;  // 16 bits
-      enviaTrem(&payloadT[0], 8, destino);
+    if (digitalRead(BOT_2) == LOW && last_button != BOT_2){ {
+      Serial.println("B2 --> B1 : Sending exit");
+      for (int i = 0; i < 5; i++) payloadT[i] = 0;
+      enviaTrem(&payloadT[0], 5, destino);
     }
-    botao1Pressionado = botao2Pressionado = false;  // Reset estados
+
+    last_button = 0;
+  }
+  else {
+    if (digitalRead(BOT_1) == LOW) {
+      last_button = BOT_1;
+      last_button_press = millis();
+    }
+    if (digitalRead(BOT_2) == LOW) {
+      last_button = BOT_2;
+      last_button_press = millis();
+    }
   }
 }
