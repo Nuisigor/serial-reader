@@ -33,10 +33,13 @@ uint8_t origem = 5;
 uint8_t rede = 88;
 
 // Variáveis de estado para os botões
+uint8_t last_button;
+
 bool botao1Pressionado = false;
 bool botao2Pressionado = false;
 unsigned long tempoBotao1 = 0; // Armazena o tempo do pressionamento
 unsigned long tempoBotao2 = 0;
+unsigned long last_time = 0;
 
 bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uint8_t rede, unsigned long timeout) {
   Serial.println("Iniciando envio...");
@@ -97,7 +100,7 @@ bool enviaTrem(char* pacote, uint8_t tamanho, uint8_t destino) {
 void setup(void) {
   pinMode(BOT_1, INPUT_PULLUP);  // Botão 1 (D2)
   pinMode(BOT_2, INPUT_PULLUP);  // Botão 2 (D3)
-  Serial.begin(115200);
+  Serial.begin(500000);
 
   if (!radio.begin()) {
     Serial.println(F("radio hardware not responding!"));
@@ -120,39 +123,41 @@ void setup(void) {
 void loop(void) {
   uint8_t destino = 44;
 
-  // Botão 1 pressionado
-  if (digitalRead(BOT_1) == LOW && !botao1Pressionado) {
-    botao1Pressionado = true;
-    tempoBotao1 = millis();
-    Serial.println("Botão 1 pressionado. Aguardando Botão 2...");
-    delay(200);  // Debounce
-  }
-
-  // Botão 2 pressionado
-  if (digitalRead(BOT_2) == LOW && !botao2Pressionado) {
-    botao2Pressionado = true;
-    tempoBotao2 = millis();
-    Serial.println("Botão 2 pressionado. Aguardando Botão 1...");
-    delay(200);  // Debounce
-  }
-
-  // Verifica sequência Botão 1 -> Botão 2
-  if (botao1Pressionado && botao2Pressionado) {
-    if (tempoBotao2 - tempoBotao1 <= 2000) {  // 2 segundos limite
-      Serial.println("Sequência Botão 1 -> Botão 2 detectada. Enviando 8 bits...");
-      for (int i = 0; i < 8; i++) payloadT[i] = 0b10101010;  // 8 bits
-      enviaTrem(&payloadT[0], 8, destino);
+    if (digitalRead(BOT_1) == LOW && millis() - last_time > 1000) {
+        if (last_button == BOT_2) {
+            Serial.println("Sequência Botão 2 -> Botão 1 detectada. Enviando 16 bits...");
+            for (int i = 0; i < 8; i++) payloadT[i] = 'o';  // 16 bits
+            enviaTrem(&payloadT[0], 8, destino);
+            last_button = NULL;
+        }
+        else if (last_button == BOT_1) {
+            Serial.println("Reseting");
+            last_button = NULL;
+        } 
+        else {
+            Serial.println("Botão 1 pressionado");
+            last_button = BOT_1;
+        }
+        last_time = millis();
+        delay(200);
     }
-    botao1Pressionado = botao2Pressionado = false;  // Reset estados
-  }
 
-  // Verifica sequência Botão 2 -> Botão 1
-  if (botao2Pressionado && botao1Pressionado) {
-    if (tempoBotao1 - tempoBotao2 <= 2000) {  // 2 segundos limite
-      Serial.println("Sequência Botão 2 -> Botão 1 detectada. Enviando 16 bits...");
-      for (int i = 0; i < 8; i++) payloadT[i] = 0b10101010;  // 16 bits
-      enviaTrem(&payloadT[0], 8, destino);
+    else if (digitalRead(BOT_2) == LOW && millis() - last_time > 1000) {
+        if (last_button == BOT_1) {
+            Serial.println("Sequência Botão 1 -> Botão 2 detectada. Enviando 8 bits...");
+            for (int i = 0; i < 8; i++) payloadT[i] = 'i';  // 8 bits
+            enviaTrem(&payloadT[0], 8, destino);
+            last_button = NULL;
+        }
+        else if (last_button == BOT_2) {
+            Serial.println("Reseting");
+            last_button = NULL;
+        } 
+        else {
+            Serial.println("Botão 2 pressionado");
+            last_button = BOT_2;
+        }
+        last_time = millis();
+        delay(200);
     }
-    botao1Pressionado = botao2Pressionado = false;  // Reset estados
-  }
 }

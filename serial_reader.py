@@ -11,7 +11,7 @@ for port in ports:
     print(port)
 
 for port, desc, hwid in sorted(ports):
-    if 'COM4' in desc:
+    if 'COM3' in desc:
         arduino_port = port
         break
 

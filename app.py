@@ -5,19 +5,20 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 
 def query_database(start_time, end_time):
+    start_time = start_time.replace("T", " ")
+    end_time = end_time.replace("T", " ")
+
     conn = sqlite3.connect("serial_data.db")
     cursor = conn.cursor()
-
     query = """
     SELECT 
         room,
-        SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS entradas,
-        SUM(CASE WHEN value = 2 THEN 1 ELSE 0 END) AS saidas
-    FROM registros
-    WHERE strftime('%Y-%m-%d %H:%M:%S', timestamp) BETWEEN ? AND ?
+        SUM(CASE WHEN value = 105 THEN 1 ELSE 0 END) AS entradas,
+        SUM(CASE WHEN value = 111 THEN 1 ELSE 0 END) AS saidas
+    FROM records
+    WHERE timestamp BETWEEN ? AND ?
     GROUP BY room;
     """
-
     cursor.execute(query, (start_time, end_time))
     results = cursor.fetchall()
     conn.close()

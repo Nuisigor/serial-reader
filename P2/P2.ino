@@ -79,10 +79,6 @@ PacketStatus recebe(char* pacote, uint8_t tamanho, uint8_t controle, uint8_t red
     if (radio.available()) {
       radio.read(&pacote[0], tamanho);
       if (pacote[0] == origem && pacote[2] == rede && pacote[3] == controle) {
-        Serial.print("[");
-        Serial.print(int(pacote[1]));
-        Serial.print("]");
-        Serial.println(int(pacote[4]));
         status.ret = true;
         status.remetente = pacote[1];
         return status;
