@@ -9,8 +9,8 @@
 #define CE_PIN 7
 #define CSN_PIN 8
 
-#define TIMEOUTRECV 1000000  //us
-#define TIMEOUTSEND 6000     //us
+#define TIMEOUTRECV 2000000  //us
+#define TIMEOUTSEND 120000     //us
 
 #define ACK 1
 #define RTS 2
@@ -79,6 +79,7 @@ PacketStatus recebe(char* pacote, uint8_t tamanho, uint8_t controle, uint8_t red
     if (radio.available()) {
       radio.read(&pacote[0], tamanho);
       if (pacote[0] == origem && pacote[2] == rede && pacote[3] == controle) {
+        Serial.println("dsadsa");
         status.ret = true;
         status.remetente = pacote[1];
         return status;
@@ -153,7 +154,7 @@ void setup(void) {
   radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
   radio.setAutoAck(false);        // Don't acknowledge arbitrary signals
   radio.disableCRC();             // Accept any signal we find
-  radio.setDataRate(RF24_1MBPS);
+  radio.setDataRate(RF24_2MBPS);
 
 
   radio.setPayloadSize(sizeof(payloadT));
@@ -161,7 +162,7 @@ void setup(void) {
   radio.openWritingPipe(address[0]);     // always uses pipe 0
   radio.openReadingPipe(1, address[1]);  // using pipe 1
 
-  radio.setChannel(100);
+  radio.setChannel(37);
 
   printf_begin();
   radio.printPrettyDetails();

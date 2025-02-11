@@ -12,8 +12,8 @@
 #define BOT_1 2  // Botão 1 conectado ao pino D2
 #define BOT_2 3  // Botão 2 conectado ao pino D3
 
-#define TIMEOUTRECV 1000000  //us
-#define TIMEOUTSEND 6000     //us
+#define TIMEOUTRECV 2000000  //us
+#define TIMEOUTSEND 120000     //us
 
 #define ACK 1
 #define RTS 2
@@ -29,7 +29,7 @@ RF24 radio(CE_PIN, CSN_PIN);
 uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 
 char payloadT[10];  // Payload para os bits a serem enviados
-uint8_t origem = 5;
+uint8_t origem = 7;
 uint8_t rede = 88;
 
 // Variáveis de estado para os botões
@@ -63,7 +63,7 @@ bool envia(char* pacote, uint8_t destino, uint8_t tamanho, uint8_t controle, uin
         Serial.println("Falha no envio do pacote.");
       }
     }
-    delayMicroseconds(150);
+    delayMicroseconds(100);
   }
   Serial.println("Tempo de envio esgotado.");
   return false;
@@ -110,11 +110,11 @@ void setup(void) {
   radio.setPALevel(RF24_PA_MAX);
   radio.setAutoAck(false);
   radio.disableCRC();
-  radio.setDataRate(RF24_1MBPS);
+  radio.setDataRate(RF24_2MBPS);
   radio.setPayloadSize(sizeof(payloadT));
   radio.openWritingPipe(address[0]);
   radio.openReadingPipe(1, address[1]);
-  radio.setChannel(100);
+  radio.setChannel(37);
 
   printf_begin();
   radio.printPrettyDetails();
